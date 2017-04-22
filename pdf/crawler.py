@@ -1,165 +1,170 @@
-# coding=utf-8
-from __future__ import unicode_literals
+#! /usr/bin/env python3
+# -*- coding: utf-8 -*-
+'''
+This crawler is used to crawl a
+web site and change it to pdf
+'''
 
-import logging
-import os
-import re
-import time
+__author__ = 'ly'
 
-try:
-    from urllib.parse import urlparse  # py3
-except:
-    from urlparse import urlparse  # py2
-
-import pdfkit
-import requests
+from urllib import request
+from urllib import parse
+from urllib import error
 from bs4 import BeautifulSoup
+from urllib.parse import urljoin, urlparse
+import pdfkit
+import time, os, re, logging
 
-html_template = """
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-</head>
-<body>
-{content}
-</body>
-</html>
-
-"""
-
+from PyPDF2 import PdfFileMerger
 
 class Crawler(object):
-    """
+    '''
     爬虫基类，所有爬虫都应该继承此类
-    """
+    '''
     name = None
+    # 需要在body中添加自己的内容
+    html_template = '''
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+        <meta charset="UTF-8">
+    </head>
+    <body>
+    
+    </body>
+    </html>
+    '''
+    # css的模板样式，自己添加需要的href
+    css_template = '<link rel="stylesheet" type="text/css">'
 
     def __init__(self, name, start_url):
-        """
+        '''
         初始化
-        :param name: 保存问的PDF文件名,不需要后缀名
-        :param start_url: 爬虫入口URL
-        """
+        ：param name: 保存PDF文件名，不需要后缀名
+        : param start_url: 爬虫入口url
+        '''
         self.name = name
         self.start_url = start_url
         self.domain = '{uri.scheme}://{uri.netloc}'.format(uri=urlparse(self.start_url))
 
     def crawl(self, url):
-        """
-        pass
-        :return:
-        """
-        print(url)
-        response = requests.get(url)
-        return response
+        '''
+        return url
+        '''
+        return request.urlopen(url)
 
     def parse_menu(self, response):
-        """
-        解析目录结构,获取所有URL目录列表:由子类实现
-        :param response 爬虫返回的response对象
-        :return: url 可迭代对象(iterable) 列表,生成器,元组都可以
-        """
+        '''
+        解析目录结构
+        '''
         raise NotImplementedError
 
     def parse_body(self, response):
-        """
-        解析正文,由子类实现
-        :param response: 爬虫返回的response对象
-        :return: 返回经过处理的html文本
-        """
+        '''
+        解析正文
+        '''
         raise NotImplementedError
+    def parse_css(self, response):
+        '''
+        解析css(注： 整个网页都是一样的css文件，可以有多个css文件，但是大家都要是一样的)
+        '''
+        return None
 
     def run(self):
+        '''
+        run method
+        '''
         start = time.time()
-        options = {
-            'page-size': 'Letter',
-            'margin-top': '0.75in',
-            'margin-right': '0.75in',
-            'margin-bottom': '0.75in',
-            'margin-left': '0.75in',
-            'encoding': "UTF-8",
-            'custom-header': [
-                ('Accept-Encoding', 'gzip')
-            ],
-            'cookie': [
-                ('cookie-name1', 'cookie-value1'),
-                ('cookie-name2', 'cookie-value2'),
-            ],
-            'outline-depth': 10,
-        }
-        htmls = []
-        for index, url in enumerate(self.parse_menu(self.crawl(self.start_url))):
-            html = self.parse_body(self.crawl(url))
-            f_name = ".".join([str(index), "html"])
-            with open(f_name, 'wb') as f:
-                f.write(html)
-            htmls.append(f_name)
+        css_list = self.parse_css(self.crawl(self.start_url))
+        menu_list = self.parse_menu(self.crawl(self.start_url))
+        if not menu_list:
+            logging.error('在起始url没有找到目录，程序返回', exc_info=True)
+            return None
+        # 对html、css等文件的出来
+        # try except finally 方法
+        html_template = '''
+        <!DOCTYPE html>
+        <html lang="en">
+        <head>
+            <meta charset="UTF-8">
+        '''
+        for css in css_list:
+            html_template = html_template + '\n <link rel="stylesheet" href="{}">'.format(css)
+        html_template = html_template + '\n</head>\n<body>'
+        with open('final.html', 'wb') as f_html:
+            f_html.write(html_template.encode('utf-8'))
+            for url in menu_list:
+                cur_html = self.parse_body(self.crawl(url))
+                print('抓取 {} 完成， 正在写入文件'.format(str(cur_html.h1)))
+                f_html.write(cur_html.encode('utf-8'))
+            f_html.write('\n</body>\n</html>'.encode('utf-8'))
 
-        pdfkit.from_file(htmls, self.name + ".pdf", options=options)
-        for html in htmls:
-            os.remove(html)
+        print('translate to "final.pdf"!!')
+        try:
+            pdfkit.from_file('final.html', self.name + ".pdf")
+            #os.remove('final.html')
+        except Exception as e:
+            logging.error('转化为pdf失败！\n', exc_info=True)
         total_time = time.time() - start
-        print(u"总共耗时：%f 秒" % total_time)
+        print(u'总计耗时： %f 秒' % total_time)
 
-
-class LiaoxuefengPythonCrawler(Crawler):
-    """
-    廖雪峰Python3教程
-    """
+class WebCrawler(Crawler):
+    '''
+    廖雪峰python3教程
+    '''
 
     def parse_menu(self, response):
-        """
-        解析目录结构,获取所有URL目录列表
-        :param response 爬虫返回的response对象
-        :return: url生成器
-        """
-        soup = BeautifulSoup(response.content, "html.parser")
-        menu_tag = soup.find_all(class_="uk-nav uk-nav-side")[1]
-        for li in menu_tag.find_all("li"):
-            url = li.a.get("href")
-            if not url.startswith("http"):
-                url = "".join([self.domain, url])  # 补全为全路径
-            yield url
+        '''
+        解析目录结构
+        '''
+        bs_obj = BeautifulSoup(response, 'lxml')
+        nav_div = bs_obj.find('div', class_='x-sidebar-left-content')
+        link_list = nav_div.findAll('a', {'href' : re.compile('/wiki/')})
+        for alist in link_list:
+            src = alist['href']
+            if not src.startswith('http'):
+                src = urljoin(self.start_url, src)
+            yield src
+
+    def parse_css(self, response):
+        '''
+        解析css文件
+        '''
+        bs_obj = BeautifulSoup(response, 'lxml')
+        css_label = bs_obj.head.findAll('link', {'href' : re.compile(r'.*?\.css')})
+        css_list = []
+        for alabel in css_label:
+            css_list.append(urljoin(self.start_url, alabel['href']))
+        return css_list
+        #return css_list if Not len(css_list) else None
+
 
     def parse_body(self, response):
-        """
+        '''
         解析正文
-        :param response: 爬虫返回的response对象
-        :return: 返回处理后的html文本
-        """
+        '''
         try:
-            soup = BeautifulSoup(response.content, 'html.parser')
-            body = soup.find_all(class_="x-wiki-content")[0]
+            bs_obj = BeautifulSoup(response, 'lxml')
+            title = bs_obj.h4.get_text()
+            main_page = bs_obj.find('div', class_='x-wiki-content')
 
-            # 加入标题, 居中显示
-            title = soup.find('h4').get_text()
-            center_tag = soup.new_tag("center")
-            title_tag = soup.new_tag('h1')
-            title_tag.string = title
-            center_tag.insert(1, title_tag)
-            body.insert(1, center_tag)
+            new_center = bs_obj.new_tag('center')
+            new_title = bs_obj.new_tag('h1')
+            new_title.string = title
+            new_center.insert(1, new_title)
+            main_page.insert(1, new_center)
 
-            html = str(body)
-            # body中的img标签的src相对路径的改成绝对路径
-            pattern = "(<img .*?src=\")(.*?)(\")"
+            for img in main_page.findAll('img', {'src' : re.compile('^(?!http)')}):
+                img['src'] = urljoin(self.start_url, img['src'])
 
-            def func(m):
-                if not m.group(3).startswith("http"):
-                    rtn = "".join([m.group(1), self.domain, m.group(2), m.group(3)])
-                    return rtn
-                else:
-                    return "".join([m.group(1), m.group(2), m.group(3)])
-
-            html = re.compile(pattern).sub(func, html)
-            html = html_template.format(content=html)
-            html = html.encode("utf-8")
-            return html
+            return main_page
+            #html = BeautifulSoup(self.html_template, 'lxml')
+            #html.body.insert(1, main_page)
+            #return (html.encode('utf-8'), title)
         except Exception as e:
-            logging.error("解析错误", exc_info=True)
-
+            logging.error('解析错误!\n', exc_info=True)
 
 if __name__ == '__main__':
-    start_url = "http://www.liaoxuefeng.com/wiki/0013739516305929606dd18361248578c67b8067c8c017b000"
-    crawler = LiaoxuefengPythonCrawler("廖雪峰Git", start_url)
+    start_url = 'http://www.liaoxuefeng.com/wiki/0014316089557264a6b348958f449949df42a6d3a2e542c000'
+    crawler = WebCrawler('python3', start_url)
     crawler.run()
