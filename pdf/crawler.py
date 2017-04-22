@@ -15,27 +15,11 @@ from urllib.parse import urljoin, urlparse
 import pdfkit
 import time, os, re, logging
 
-from PyPDF2 import PdfFileMerger
-
 class Crawler(object):
     '''
     爬虫基类，所有爬虫都应该继承此类
     '''
     name = None
-    # 需要在body中添加自己的内容
-    html_template = '''
-    <!DOCTYPE html>
-    <html lang="en">
-    <head>
-        <meta charset="UTF-8">
-    </head>
-    <body>
-    
-    </body>
-    </html>
-    '''
-    # css的模板样式，自己添加需要的href
-    css_template = '<link rel="stylesheet" type="text/css">'
 
     def __init__(self, name, start_url):
         '''
@@ -45,6 +29,7 @@ class Crawler(object):
         '''
         self.name = name
         self.start_url = start_url
+	# 爬取网站的域名，但是这里没有使用这个
         self.domain = '{uri.scheme}://{uri.netloc}'.format(uri=urlparse(self.start_url))
 
     def crawl(self, url):
@@ -66,7 +51,7 @@ class Crawler(object):
         raise NotImplementedError
     def parse_css(self, response):
         '''
-        解析css(注： 整个网页都是一样的css文件，可以有多个css文件，但是大家都要是一样的)
+        解析css(注： 可以有多个css文件，但是所有网页的css是一样的)
         '''
         return None
 
@@ -88,9 +73,10 @@ class Crawler(object):
         <head>
             <meta charset="UTF-8">
         '''
-        for css in css_list:
-            html_template = html_template + '\n <link rel="stylesheet" href="{}">'.format(css)
-        html_template = html_template + '\n</head>\n<body>'
+        if css_list:
+            for css in css_list:
+                html_template = html_template + '\n <link rel="stylesheet" href="{}">'.format(css)
+            html_template = html_template + '\n</head>\n<body>'
         with open('final.html', 'wb') as f_html:
             f_html.write(html_template.encode('utf-8'))
             for url in menu_list:
@@ -136,7 +122,6 @@ class WebCrawler(Crawler):
         for alabel in css_label:
             css_list.append(urljoin(self.start_url, alabel['href']))
         return css_list
-        #return css_list if Not len(css_list) else None
 
 
     def parse_body(self, response):
@@ -158,9 +143,6 @@ class WebCrawler(Crawler):
                 img['src'] = urljoin(self.start_url, img['src'])
 
             return main_page
-            #html = BeautifulSoup(self.html_template, 'lxml')
-            #html.body.insert(1, main_page)
-            #return (html.encode('utf-8'), title)
         except Exception as e:
             logging.error('解析错误!\n', exc_info=True)
 

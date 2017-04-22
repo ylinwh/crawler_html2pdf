@@ -42,12 +42,11 @@ python crawler.py
 ### 更新记录
 
 * 2017-2-21: 对代码进行了全面的重构,可扩展, 子类爬虫只需实现 `parse_menu`和`parse_body`方法就可以实现HTML转换PDF的逻辑
+* 2017-4-23: 增加解析css样式表的方法，转化后的pdf文件包含源网页的样式；改变爬取后网页的保存方法——统一放在一个`final.html`文件中，然后一起转化为PDF文件。
+
+### 致谢
+* 原作者：liuzhijun（https://github.com/lzjun567）
 
 
-### Contact me
-
->作者：liuzhijun  
->微信： lzjun567  
->公众号：Python之禅（id：VTtalk）
 
 
