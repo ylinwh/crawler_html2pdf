@@ -81,13 +81,14 @@ class Crawler(object):
             f_html.write(html_template.encode('utf-8'))
             for url in menu_list:
                 cur_html = self.parse_body(self.crawl(url))
-                print('抓取 {} 完成， 正在写入文件'.format(str(cur_html.h1)))
+                print('抓取 "{}" 网页完成， 正在写入本地文件'.format(cur_html.h1.get_text()))
                 f_html.write(cur_html.encode('utf-8'))
             f_html.write('\n</body>\n</html>'.encode('utf-8'))
 
-        print('translate to "final.pdf"!!')
+        print('translate to "{}.pdf"!!'.format(self.name))
         try:
             pdfkit.from_file('final.html', self.name + ".pdf")
+            # 调试的时候保留了html源文件，实际使用的时候可以删掉
             #os.remove('final.html')
         except Exception as e:
             logging.error('转化为pdf失败！\n', exc_info=True)
@@ -118,10 +119,8 @@ class WebCrawler(Crawler):
         '''
         bs_obj = BeautifulSoup(response, 'lxml')
         css_label = bs_obj.head.findAll('link', {'href' : re.compile(r'.*?\.css')})
-        css_list = []
         for alabel in css_label:
-            css_list.append(urljoin(self.start_url, alabel['href']))
-        return css_list
+            yield urljoin(self.start_url, alabel['href'])
 
 
     def parse_body(self, response):
